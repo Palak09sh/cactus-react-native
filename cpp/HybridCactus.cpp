@@ -6,13 +6,15 @@ HybridCactus::HybridCactus() : HybridObject(TAG) {}
 
 std::shared_ptr<Promise<void>> HybridCactus::init(const std::string &modelPath, double contextSize) {
   return Promise<void>::async([this, modelPath, contextSize]() -> void {
-    if (this->_model != nullptr) {
+    std::lock_guard<std::mutex> lock(this->_modelMutex);
+
+    if (this->_model) {
       throw std::runtime_error("Cactus model is already initialized");
     }
 
     const cactus_model_t model = cactus_init(modelPath.c_str(), contextSize);
 
-    if (model == nullptr) {
+    if (!model) {
       throw std::runtime_error("Failed to initialize Cactus model");
     }
 
@@ -23,7 +25,9 @@ std::shared_ptr<Promise<void>> HybridCactus::init(const std::string &modelPath, 
 
 std::shared_ptr<Promise<std::string>> HybridCactus::complete(const std::string &messagesJson, double responseBufferSize, const std::optional<std::string> &optionsJson, const std::optional<std::string> &toolsJson, const std::optional<std::function<void(const std::string & /* token */, double /* tokenId */)>> &callback) {
   return Promise<std::string>::async([this, messagesJson, optionsJson, toolsJson, callback, responseBufferSize]() -> std::string {
-    if (this->_model == nullptr) {
+    std::lock_guard<std::mutex> lock(this->_modelMutex);
+
+    if (!this->_model) {
       throw std::runtime_error("Cactus model is not initialized");
     }
 
@@ -40,7 +44,7 @@ std::shared_ptr<Promise<std::string>> HybridCactus::complete(const std::string &
     std::string responseBuffer;
     responseBuffer.resize(responseBufferSize);
 
-    cactus_complete(
+    int result = cactus_complete(
                     this->_model,
                     messagesJson.c_str(),
                     responseBuffer.data(),
@@ -51,6 +55,10 @@ std::shared_ptr<Promise<std::string>> HybridCactus::complete(const std::string &
                     &callbackCtx
                     );
 
+    if (result < 0) {
+      throw std::runtime_error("Cactus completion failed");
+    }
+
     // Remove null terminator
     responseBuffer.resize(strlen(responseBuffer.c_str()));
 
@@ -60,14 +68,20 @@ std::shared_ptr<Promise<std::string>> HybridCactus::complete(const std::string &
 
 std::shared_ptr<Promise<std::vector<double>>> HybridCactus::embed(const std::string &text, double embeddingBufferSize) {
   return Promise<std::vector<double>>::async([this, text, embeddingBufferSize]() -> std::vector<double> {
-    if (this->_model == nullptr) {
+    std::lock_guard<std::mutex> lock(this->_modelMutex);
+
+    if (!this->_model) {
       throw std::runtime_error("Cactus model is not initialized");
     }
 
     std::vector<float> embeddingBuffer(embeddingBufferSize);
     size_t embeddingDim;
 
-    cactus_embed(this->_model, text.c_str(), embeddingBuffer.data(), embeddingBufferSize * sizeof(float), &embeddingDim);
+    int result = cactus_embed(this->_model, text.c_str(), embeddingBuffer.data(), embeddingBufferSize * sizeof(float), &embeddingDim);
+
+    if (result < 0) {
+      throw std::runtime_error("Cactus embedding failed");
+    }
 
     embeddingBuffer.resize(embeddingDim);
 
@@ -77,7 +91,9 @@ std::shared_ptr<Promise<std::vector<double>>> HybridCactus::embed(const std::str
 
 std::shared_ptr<Promise<void>> HybridCactus::reset() {
   return Promise<void>::async([this]() -> void {
-    if (this->_model == nullptr) {
+    std::lock_guard<std::mutex> lock(this->_modelMutex);
+
+    if (!this->_model) {
       throw std::runtime_error("Cactus model is not initialized");
     }
 
@@ -87,17 +103,15 @@ std::shared_ptr<Promise<void>> HybridCactus::reset() {
 
 std::shared_ptr<Promise<void>> HybridCactus::stop() {
   return Promise<void>::async([this]() -> void {
-    if (this->_model == nullptr) {
-      throw std::runtime_error("Cactus model is not initialized");
-    }
-
     cactus_stop(this->_model);
   });
 }
 
 std::shared_ptr<Promise<void>> HybridCactus::destroy() {
   return Promise<void>::async([this]() -> void {
-    if (this->_model == nullptr) {
+    std::lock_guard<std::mutex> lock(this->_modelMutex);
+
+    if (!this->_model) {
       throw std::runtime_error("Cactus model is not initialized");
     }
 

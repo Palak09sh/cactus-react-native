@@ -11,6 +11,7 @@ import type {
 import { Telemetry } from '../telemetry/Telemetry';
 import { CactusConfig } from '../config/CactusConfig';
 import { Database } from '../api/Database';
+import { getErrorMessage } from '../utils/error';
 
 export class CactusLM {
   private readonly cactus = new Cactus();
@@ -22,12 +23,18 @@ export class CactusLM {
   };
   private static readonly defaultEmbeddingBufferSize = 2048;
 
+  private isDownloading = false;
   private initialized: { model: string; contextSize: number } | null = null;
+  private isGenerating = false;
 
   public async download({
     model,
     onProgress,
   }: CactusDownloadParams = {}): Promise<void> {
+    if (this.isDownloading) {
+      throw new Error('CactusLM is already downloading');
+    }
+
     model = model ?? CactusLM.defaultModel;
 
     if (await CactusFileSystem.modelExists(model)) {
@@ -35,7 +42,12 @@ export class CactusLM {
       return;
     }
 
-    return CactusFileSystem.downloadModel(model, onProgress);
+    this.isDownloading = true;
+    try {
+      await CactusFileSystem.downloadModel(model, onProgress);
+    } finally {
+      this.isDownloading = false;
+    }
   }
 
   public async init({
@@ -60,7 +72,9 @@ export class CactusLM {
       await this.cactus.destroy();
     }
 
-    await this.download({ model });
+    if (!(await CactusFileSystem.modelExists(model))) {
+      throw new Error(`Model "${model}" is not downloaded`);
+    }
 
     try {
       await this.cactus.init(
@@ -70,8 +84,7 @@ export class CactusLM {
       Telemetry.logInit(model, true);
       this.initialized = { model, contextSize };
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      Telemetry.logInit(model, false, message);
+      Telemetry.logInit(model, false, getErrorMessage(error));
       throw error;
     }
   }
@@ -83,6 +96,10 @@ export class CactusLM {
     model,
     contextSize,
   }: CactusCompletionParams): Promise<CactusCompletionResult> {
+    if (this.isGenerating) {
+      throw new Error('CactusLM is already generating');
+    }
+
     model = model ?? this.initialized?.model ?? CactusLM.defaultModel;
     contextSize =
       contextSize ??
@@ -98,6 +115,8 @@ export class CactusLM {
     const responseBufferSize =
       8 * (options.maxTokens ?? CactusLM.defaultCompletionOptions.maxTokens) +
       256;
+
+    this.isGenerating = true;
     try {
       const result = await this.cactus.complete(
         messages,
@@ -113,9 +132,10 @@ export class CactusLM {
       );
       return result;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      Telemetry.logCompletion(model, false, message);
+      Telemetry.logCompletion(model, false, getErrorMessage(error));
       throw error;
+    } finally {
+      this.isGenerating = false;
     }
   }
 
@@ -123,10 +143,15 @@ export class CactusLM {
     text,
     model,
   }: CactusEmbeddingParams): Promise<CactusEmbeddingResult> {
+    if (this.isGenerating) {
+      throw new Error('CactusLM is already generating');
+    }
+
     model = model ?? this.initialized?.model ?? CactusLM.defaultModel;
 
     await this.init({ model });
 
+    this.isGenerating = true;
     try {
       const embedding = await this.cactus.embed(
         text,
@@ -135,9 +160,10 @@ export class CactusLM {
       Telemetry.logEmbedding(model, true);
       return { embedding };
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      Telemetry.logEmbedding(model, false, message);
+      Telemetry.logEmbedding(model, false, getErrorMessage(error));
       throw error;
+    } finally {
+      this.isGenerating = false;
     }
   }
 
@@ -146,7 +172,9 @@ export class CactusLM {
   }
 
   public async destroy(): Promise<void> {
+    await this.stop();
     await this.cactus.destroy();
+
     this.initialized = null;
   }
 

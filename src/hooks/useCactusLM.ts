@@ -8,6 +8,7 @@ import type {
   CactusEmbeddingResult,
   CactusInitParams,
 } from '../types/CactusLM';
+import { getErrorMessage } from '../utils/error';
 
 export const useCactusLM = () => {
   const cactusLMRef = useRef(new CactusLM());
@@ -32,6 +33,8 @@ export const useCactusLM = () => {
 
   const download = useCallback(
     async ({ model, onProgress }: CactusDownloadParams = {}) => {
+      setError(null);
+
       try {
         await cactusLMRef.current.download({
           model,
@@ -41,8 +44,7 @@ export const useCactusLM = () => {
           },
         });
       } catch (e) {
-        const message = e instanceof Error ? e.message : 'Unknown error';
-        setError(message);
+        setError(getErrorMessage(e));
         throw e;
       }
     },
@@ -51,19 +53,18 @@ export const useCactusLM = () => {
 
   const init = useCallback(
     async ({ model, contextSize }: CactusInitParams = {}) => {
-      await download({ model });
+      setError(null);
 
       setIsInitialized(false);
       try {
         await cactusLMRef.current.init({ model, contextSize });
         setIsInitialized(true);
       } catch (e) {
-        const message = e instanceof Error ? e.message : 'Unknown error';
-        setError(message);
+        setError(getErrorMessage(e));
         throw e;
       }
     },
-    [download]
+    []
   );
 
   const complete = useCallback(
@@ -75,8 +76,12 @@ export const useCactusLM = () => {
       contextSize,
     }: CactusCompletionParams): Promise<CactusCompletionResult> => {
       if (isGenerating) {
-        throw new Error('CactusLM is already generating');
+        const message = 'CactusLM is already generating';
+        setError(message);
+        throw new Error(message);
       }
+
+      setError(null);
 
       await init({ model, contextSize });
 
@@ -94,8 +99,7 @@ export const useCactusLM = () => {
           contextSize,
         });
       } catch (e) {
-        const message = e instanceof Error ? e.message : 'Unknown error';
-        setError(message);
+        setError(getErrorMessage(e));
         throw e;
       } finally {
         setIsGenerating(false);
@@ -110,8 +114,12 @@ export const useCactusLM = () => {
       model,
     }: CactusEmbeddingParams): Promise<CactusEmbeddingResult> => {
       if (isGenerating) {
-        throw new Error('CactusLM is already generating');
+        const message = 'CactusLM is already generating';
+        setError(message);
+        throw new Error(message);
       }
+
+      setError(null);
 
       await init({ model });
 
@@ -119,8 +127,7 @@ export const useCactusLM = () => {
       try {
         return await cactusLMRef.current.embed({ text, model });
       } catch (e) {
-        const message = e instanceof Error ? e.message : 'Unknown error';
-        setError(message);
+        setError(getErrorMessage(e));
         throw e;
       } finally {
         setIsGenerating(false);
@@ -130,35 +137,38 @@ export const useCactusLM = () => {
   );
 
   const stop = useCallback(async () => {
+    setError(null);
+
     try {
       await cactusLMRef.current.stop();
       setIsGenerating(false);
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      setError(message);
+      setError(getErrorMessage(e));
       throw e;
     }
   }, []);
 
   const destroy = useCallback(async () => {
+    setError(null);
+
     await stop();
 
     try {
       await cactusLMRef.current.destroy();
       setIsInitialized(false);
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      setError(message);
+      setError(getErrorMessage(e));
       throw e;
     }
   }, [stop]);
 
   const getModels = useCallback(async () => {
+    setError(null);
+
     try {
       return await cactusLMRef.current.getModels();
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      setError(message);
+      setError(getErrorMessage(e));
       throw e;
     }
   }, []);

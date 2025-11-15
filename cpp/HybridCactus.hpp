@@ -1,6 +1,7 @@
 #pragma once
 #include "HybridCactusSpec.hpp"
 
+#include <mutex>
 #include "cactus_ffi.h"
 
 namespace margelo::nitro::cactus
@@ -26,6 +27,8 @@ public:
 private:
   cactus_model_t _model = nullptr;
   size_t _contextSize;
+
+  std::mutex _modelMutex;
 };
 
 } // namespace margelo::nitro::cactus

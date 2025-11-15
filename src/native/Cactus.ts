@@ -36,26 +36,30 @@ export class Cactus {
         })
       : undefined;
 
-    const response = JSON.parse(
-      await this.hybridCactus.complete(
-        messagesJson,
-        responseBufferSize,
-        optionsJson,
-        undefined,
-        callback
-      )
+    const response = await this.hybridCactus.complete(
+      messagesJson,
+      responseBufferSize,
+      optionsJson,
+      undefined,
+      callback
     );
 
-    return {
-      success: response.success,
-      response: response.response,
-      timeToFirstTokenMs: response.time_to_first_token_ms,
-      totalTimeMs: response.total_time_ms,
-      tokensPerSecond: response.tokens_per_second,
-      prefillTokens: response.prefill_tokens,
-      decodeTokens: response.decode_tokens,
-      totalTokens: response.total_tokens,
-    };
+    try {
+      const parsed = JSON.parse(response);
+
+      return {
+        success: parsed.success,
+        response: parsed.response,
+        timeToFirstTokenMs: parsed.time_to_first_token_ms,
+        totalTimeMs: parsed.total_time_ms,
+        tokensPerSecond: parsed.tokens_per_second,
+        prefillTokens: parsed.prefill_tokens,
+        decodeTokens: parsed.decode_tokens,
+        totalTokens: parsed.total_tokens,
+      };
+    } catch {
+      throw new Error('Unable to parse completion response: ' + response);
+    }
   }
 
   public embed(text: string, embeddingBufferSize: number): Promise<number[]> {
