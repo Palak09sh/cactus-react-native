@@ -23,6 +23,8 @@ export class CactusLM {
   };
   private static readonly defaultEmbeddingBufferSize = 2048;
 
+  private static readonly modelsInfoPath = 'models/info.json';
+
   private isDownloading = false;
   private initialized: { model: string; contextSize: number } | null = null;
   private isGenerating = false;
@@ -45,6 +47,10 @@ export class CactusLM {
     this.isDownloading = true;
     try {
       await CactusFileSystem.downloadModel(model, onProgress);
+      if (await CactusFileSystem.fileExists(CactusLM.modelsInfoPath)) {
+        await CactusFileSystem.deleteFile(CactusLM.modelsInfoPath);
+      }
+      await this.getModels();
     } finally {
       this.isDownloading = false;
     }
@@ -184,6 +190,28 @@ export class CactusLM {
   }
 
   public async getModels(): Promise<CactusModel[]> {
-    return Database.getModels();
+    if (await CactusFileSystem.fileExists(CactusLM.modelsInfoPath)) {
+      try {
+        return JSON.parse(
+          await CactusFileSystem.readFile(CactusLM.modelsInfoPath)
+        );
+      } catch {
+        // Delete corrupted models info
+        await CactusFileSystem.deleteFile(CactusLM.modelsInfoPath);
+      }
+    }
+
+    const models = await Database.getModels();
+
+    for (const model of models) {
+      model.isDownloaded = await CactusFileSystem.modelExists(model.slug);
+    }
+
+    await CactusFileSystem.writeFile(
+      CactusLM.modelsInfoPath,
+      JSON.stringify(models)
+    );
+
+    return models;
   }
 }

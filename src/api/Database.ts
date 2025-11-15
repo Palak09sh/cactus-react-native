@@ -4,6 +4,17 @@ import type { DeviceInfo } from '../specs/CactusDeviceInfo.nitro';
 import type { CactusModel } from '../types/CactusLM';
 import type { LogRecord } from '../telemetry/Telemetry';
 
+interface CactusModelResponse {
+  name: string;
+  slug: string;
+  quantization: number;
+  size_mb: number;
+  download_url: string;
+  supports_tool_calling: boolean;
+  supports_vision: boolean;
+  created_at: Date;
+}
+
 export class Database {
   private static readonly url = 'https://vlqqczxwyaodtcdmdmlw.supabase.co';
   private static readonly key =
@@ -55,6 +66,18 @@ export class Database {
       throw new Error('Getting models failed');
     }
 
-    return (await response.json()) as CactusModel[];
+    const models = (await response.json()) as CactusModelResponse[];
+
+    return models.map((model) => ({
+      name: model.name,
+      slug: model.slug,
+      quantization: model.quantization,
+      sizeMb: model.size_mb,
+      downloadUrl: model.download_url,
+      supportsToolCalling: model.supports_tool_calling,
+      supportsVision: model.supports_vision,
+      createdAt: model.created_at,
+      isDownloaded: false,
+    }));
   }
 }

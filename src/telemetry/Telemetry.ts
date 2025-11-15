@@ -38,9 +38,9 @@ export class Telemetry {
 
   private static readonly namespaceUrl = '6ba7b811-9dad-11d1-80b4-00c04fd430c8';
   private static readonly logBufferPaths = {
-    init: 'logs/init',
-    completion: 'logs/completion',
-    embedding: 'logs/embedding',
+    init: 'logs/init.json',
+    completion: 'logs/completion.json',
+    embedding: 'logs/embedding.json',
   };
 
   private static async handleLog(logRecord: LogRecord) {

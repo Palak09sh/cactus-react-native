@@ -192,11 +192,12 @@ interface CactusModel {
   name: string;
   slug: string;
   quantization: number;
-  size_mb: number;
-  download_url: string;
-  supports_tool_calling: boolean;
-  supports_vision: boolean;
-  created_at: Date;
+  sizeMb: number;
+  downloadUrl: string;
+  supportsToolCalling: boolean;
+  supportsVision: boolean;
+  createdAt: Date;
+  isDownloaded: boolean;
 }
 ```
 
